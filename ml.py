@@ -20,8 +20,8 @@ def load_config():
 
 def train_model():
     """
-    Обучает модель Naive Bayes на исторических данных, если достигнут минимальный порог.
-    Возвращает строку с результатом или ошибкой.
+    Trains the Naive Bayes model on historical data if the minimum threshold is met.
+    Returns a string containing the result or error message.
     """
     config = load_config()
     min_samples = config.get("ml_min_samples_per_class", 30)
@@ -29,17 +29,17 @@ def train_model():
     X, y = db.get_training_data()
     
     if not X:
-        return "Нет данных для обучения."
+        return "No data available for training."
 
     approved_count = sum(y)
     rejected_count = len(y) - approved_count
 
     if approved_count < min_samples or rejected_count < min_samples:
-        msg = f"Недостаточно данных для обучения. Нужно по {min_samples} примеров каждого класса. Сейчас: Approved={approved_count}, Rejected={rejected_count}."
+        msg = f"Insufficient data for training. Need at least {min_samples} samples of each class. Current status: Approved={approved_count}, Rejected={rejected_count}."
         logger.info(msg)
         return msg
 
-    # Создаем pipeline: Векторизация -> Классификатор
+    # Create a pipeline: Vectorization -> Classifier
     pipeline = Pipeline([
         ('tfidf', TfidfVectorizer(max_features=5000, ngram_range=(1, 2))),
         ('clf', MultinomialNB())
@@ -48,14 +48,14 @@ def train_model():
     pipeline.fit(X, y)
     
     joblib.dump(pipeline, MODEL_PATH)
-    msg = f"Модель успешно обучена на {approved_count} одобренных и {rejected_count} отклоненных вакансиях."
+    msg = f"Model successfully trained on {approved_count} approved and {rejected_count} rejected vacancies."
     logger.info(msg)
     return msg
 
 def predict_job(title, description):
     """
-    Предсказывает вероятность того, что вакансия будет одобрена.
-    Возвращает вероятность (float от 0.0 до 1.0) или None, если модель еще не обучена.
+    Predicts the probability of a vacancy being approved.
+    Returns the probability (float from 0.0 to 1.0) or None if the model is not trained.
     """
     if not os.path.exists(MODEL_PATH):
         return None
@@ -63,14 +63,14 @@ def predict_job(title, description):
     try:
         pipeline = joblib.load(MODEL_PATH)
     except Exception as e:
-        logger.error(f"Ошибка при загрузке модели ML: {e}")
+        logger.error(f"Error loading ML model: {e}")
         return None
 
     text = f"{title} {description}".strip()
     
-    # predict_proba возвращает массив вероятностей для каждого класса (0 и 1)
-    # Нас интересует вероятность класса 1 (Approved)
+    # predict_proba returns an array of probabilities for each class (0 and 1)
+    # We are interested in the probability of class 1 (Approved)
     probabilities = pipeline.predict_proba([text])[0]
     
-    # probabilities[1] - это вероятность класса 1 (approved)
+    # probabilities[1] is the probability of class 1 (Approved)
     return float(probabilities[1])

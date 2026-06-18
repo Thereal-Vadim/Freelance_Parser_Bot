@@ -12,11 +12,11 @@ from dotenv import load_dotenv
 
 import ml
 
-# Настройка логирования
+# Logging configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Загружаем окружение
+# Load environment variables
 load_dotenv()
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
@@ -32,7 +32,7 @@ def load_config():
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        logger.error(f"Ошибка чтения config.json: {e}")
+        logger.error(f"Error reading config.json: {e}")
         return {
             "keywords": [],
             "minus_words": [],
@@ -53,13 +53,13 @@ def fetch_kwork_jobs():
         "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
     }
     
-    # Парсим первые 5 страниц Kwork для сбора большего объема заказов
+    # Parse the first 5 pages of Kwork to gather a larger volume of jobs
     for page in range(1, 6):
         url = f"https://kwork.ru/projects?c=all&page={page}"
         try:
             res = requests.get(url, headers=headers, timeout=10)
             if res.status_code != 200:
-                logger.error(f"Не удалось загрузить Kwork (страница {page}), статус: {res.status_code}")
+                logger.error(f"Failed to load Kwork (page {page}), status code: {res.status_code}")
                 time.sleep(2)
                 continue
                 
@@ -72,11 +72,11 @@ def fetch_kwork_jobs():
                     if not want_id:
                         continue
                     
-                    title = want.get("name") or "Без названия"
+                    title = want.get("name") or "Untitled"
                     desc_raw = want.get("description") or ""
                     description = clean_html(desc_raw)
                     
-                    # Форматирование цены
+                    # Price formatting
                     price_limit = want.get("priceLimit")
                     possible_limit = want.get("possiblePriceLimit")
                     
@@ -92,7 +92,7 @@ def fetch_kwork_jobs():
                     elif price_val > 0:
                         price_str = f"{price_val} ₽"
                     else:
-                        price_str = "Договорная"
+                        price_str = "Negotiable"
                         
                     jobs.append({
                         "source": "kwork",
@@ -103,11 +103,11 @@ def fetch_kwork_jobs():
                         "price": price_str
                     })
             else:
-                logger.error(f"Не удалось найти window.stateData на странице Kwork {page}")
+                logger.error(f"Could not find window.stateData on Kwork page {page}")
         except Exception as e:
-            logger.error(f"Ошибка при парсинге Kwork (страница {page}): {e}")
+            logger.error(f"Error parsing Kwork (page {page}): {e}")
             
-        # Задержка между страницами, чтобы не словить бан по IP от Cloudflare
+        # Delay between pages to avoid IP ban from Cloudflare
         time.sleep(2)
             
     return jobs
@@ -121,7 +121,7 @@ def fetch_fl_jobs():
     try:
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code != 200:
-            logger.error(f"Не удалось загрузить FL.ru RSS, статус: {res.status_code}")
+            logger.error(f"Failed to load FL.ru RSS, status code: {res.status_code}")
             return jobs
             
         root = ET.fromstring(res.content)
@@ -131,25 +131,25 @@ def fetch_fl_jobs():
             
         items = channel.findall("item")
         for item in items:
-            title_raw = item.find("title").text if item.find("title") is not None else "Без названия"
+            title_raw = item.find("title").text if item.find("title") is not None else "Untitled"
             link = item.find("link").text if item.find("link") is not None else ""
             desc_raw = item.find("description").text if item.find("description") is not None else ""
             
             title = clean_html(title_raw)
             description = clean_html(desc_raw)
             
-            # Извлекаем ID из ссылки
+            # Extract ID from URL
             id_match = re.search(r"/projects/(\d+)/", link)
             if not id_match:
                 continue
             ext_id = f"fl_{id_match.group(1)}"
             
-            # Извлекаем бюджет из названия
-            price = "Договорная"
+            # Extract budget from title
+            price = "Negotiable"
             price_match = re.search(r"Бюджет:\s*([^,)]+)", title)
             if price_match:
                 price = price_match.group(1).replace("&#8381;", "₽").strip()
-                # Удаляем упоминание бюджета из названия
+                # Remove budget mention from the title
                 title = re.sub(r"\s*\(Бюджет:[^)]+\)", "", title).strip()
                 
             jobs.append({
@@ -161,21 +161,21 @@ def fetch_fl_jobs():
                 "price": price
             })
     except Exception as e:
-        logger.error(f"Ошибка при парсинге FL.ru RSS: {e}")
+        logger.error(f"Error parsing FL.ru RSS: {e}")
         
     return jobs
 
 def apply_filter(title, description, keywords, minus_words):
     text_to_check = f"{title}\n{description}".lower()
     
-    # Проверяем минус-слова
+    # Check negative keywords
     for mw in minus_words:
         if mw.lower() in text_to_check:
             return False
             
-    # Проверяем ключевые слова
+    # Check keywords
     if not keywords:
-        return True  # если список ключевых слов пуст, пропускаем всё
+        return True  # If keywords list is empty, allow everything
         
     for kw in keywords:
         if kw.lower() in text_to_check:
@@ -188,21 +188,21 @@ def run_cycle(dry_run=False):
     db.init_db()
     db.cleanup_old_jobs()
     
-    logger.info("Запуск цикла парсинга...")
+    logger.info("Starting parsing cycle...")
     config = load_config()
     keywords = config.get("keywords", [])
     minus_words = config.get("minus_words", [])
     
-    logger.info(f"Загружены фильтры. Ключевые слова: {keywords}. Минус-слова: {minus_words}")
+    logger.info(f"Filters loaded. Keywords: {keywords}. Negative keywords: {minus_words}")
     
-    # Сбор данных
+    # Data collection
     kwork_jobs = fetch_kwork_jobs()
     fl_jobs = fetch_fl_jobs()
     all_jobs = kwork_jobs + fl_jobs
     
-    logger.info(f"Спарсено всего заказов: {len(all_jobs)} (Kwork: {len(kwork_jobs)}, FL.ru: {len(fl_jobs)})")
+    logger.info(f"Total jobs parsed: {len(all_jobs)} (Kwork: {len(kwork_jobs)}, FL.ru: {len(fl_jobs)})")
     
-    # Фильтрация и подготовка к сохранению
+    # Filtering and preparing for storage
     processed_jobs = []
     matched_count = 0
     
@@ -211,7 +211,7 @@ def run_cycle(dry_run=False):
         status = "new"
         
         if matched:
-            # Пытаемся предсказать ML моделью
+            # Attempt ML prediction
             prob = ml.predict_job(job["title"], job["description"])
             ml_threshold = config.get("ml_rejection_threshold", 0.35)
             if prob is not None and prob < ml_threshold:
@@ -242,9 +242,9 @@ def run_cycle(dry_run=False):
         print(f"Total matched: {matched_count}")
         return
         
-    # Сохранение в БД
+    # Save to DB
     inserted = db.insert_jobs(processed_jobs)
-    logger.info(f"Сохранено в базу данных новых уникальных заказов: {inserted} (из них подошли по фильтру: {matched_count})")
+    logger.info(f"Saved {inserted} new unique jobs to the database (matched filters: {matched_count})")
 
 def main():
     parser = argparse.ArgumentParser(description="Parser daemon for Kwork and FL.ru")
@@ -258,23 +258,23 @@ def main():
     config = load_config()
     interval = config.get("scan_interval_minutes", 5)
     
-    logger.info(f"Запуск демона парсера. Интервал опроса: {interval} мин.")
+    logger.info(f"Parser daemon started. Scan interval: {interval} min.")
     cycle_count = 0
     while True:
         try:
             run_cycle()
             cycle_count += 1
-            # Периодическое переобучение ML модели каждые 5 циклов
+            # Periodic ML model retraining every 5 cycles
             if cycle_count % 5 == 0:
-                logger.info("Запуск фонового переобучения ML-модели...")
+                logger.info("Triggering background retraining of ML model...")
                 ml.train_model()
         except Exception as e:
-            logger.error(f"Непредвиденная ошибка в цикле парсинга: {e}")
+            logger.error(f"Unexpected error in parsing cycle: {e}")
         
-        # Перезагружаем конфиг на случай изменений
+        # Reload config in case of changes
         config = load_config()
         interval = config.get("scan_interval_minutes", 5)
-        logger.info(f"Ожидание {interval} минут перед следующим циклом...")
+        logger.info(f"Waiting {interval} minutes before the next cycle...")
         time.sleep(interval * 60)
 
 if __name__ == "__main__":

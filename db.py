@@ -15,7 +15,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Таблица пользователей
+    # Users table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             chat_id INTEGER PRIMARY KEY,
@@ -25,7 +25,7 @@ def init_db():
         )
     """)
     
-    # Таблица спарсенных заказов
+    # Parsed jobs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS parsed_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +43,7 @@ def init_db():
     
     conn.commit()
     conn.close()
-    logger.info("База данных SQLite успешно инициализирована.")
+    logger.info("SQLite database successfully initialized.")
 
 def register_user(chat_id, username, first_name):
     normalized_username = None
@@ -62,11 +62,11 @@ def register_user(chat_id, username, first_name):
     """, (chat_id, normalized_username, first_name))
     conn.commit()
     conn.close()
-    logger.info(f"Пользователь {chat_id} (@{normalized_username}) зарегистрирован в БД.")
+    logger.info(f"User {chat_id} (@{normalized_username}) registered in database.")
 
 def get_chat_ids_for_allowed_users(allowed_users_raw):
     """
-    Разрешает список разрешенных пользователей (ID или юзернеймы) в числовые chat_id.
+    Resolves the list of allowed users (IDs or usernames) to numeric chat_ids.
     """
     if not allowed_users_raw:
         return []
@@ -88,7 +88,7 @@ def get_chat_ids_for_allowed_users(allowed_users_raw):
     if allowed_usernames:
         conn = get_connection()
         cursor = conn.cursor()
-        # Поиск chat_id по юзернеймам
+        # Search chat_ids by usernames
         placeholders = ",".join("?" for _ in allowed_usernames)
         cursor.execute(f"SELECT chat_id FROM users WHERE username IN ({placeholders})", allowed_usernames)
         for row in cursor.fetchall():
@@ -99,8 +99,8 @@ def get_chat_ids_for_allowed_users(allowed_users_raw):
 
 def insert_jobs(jobs):
     """
-    Вставляет список вакансий/заказов.
-    Каждая вакансия в списке должна быть словарем с ключами:
+    Inserts a list of vacancies/jobs.
+    Each vacancy in the list must be a dictionary with keys:
     source, external_id, title, url, description, price, matched, status
     """
     if not jobs:
@@ -119,7 +119,7 @@ def insert_jobs(jobs):
             if cursor.rowcount > 0:
                 inserted_count += 1
         except Exception as e:
-            logger.error(f"Ошибка при вставке заказа {job.get('external_id')}: {e}")
+            logger.error(f"Error inserting job {job.get('external_id')}: {e}")
             
     conn.commit()
     conn.close()
@@ -127,7 +127,7 @@ def insert_jobs(jobs):
 
 def get_new_matched_jobs(limit=25):
     """
-    Возвращает список новых подходящих под фильтр вакансий.
+    Returns a list of new vacancies matching the filter.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -144,7 +144,7 @@ def get_new_matched_jobs(limit=25):
 
 def update_jobs_status(external_ids, new_status):
     """
-    Пакетно обновляет статус для списка вакансий по их external_id.
+    Batch updates status for a list of vacancies by their external_id.
     """
     if not external_ids:
         return
@@ -162,7 +162,7 @@ def update_jobs_status(external_ids, new_status):
 
 def cleanup_old_jobs(days=14):
     """
-    Удаляет старые вакансии из БД, чтобы она не разрасталась.
+    Deletes old vacancies from the DB to keep it from growing too large.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -171,12 +171,12 @@ def cleanup_old_jobs(days=14):
     conn.commit()
     conn.close()
     if deleted_count > 0:
-        logger.info(f"Удалено {deleted_count} старых вакансий (старше {days} дней).")
+        logger.info(f"Deleted {deleted_count} old vacancies (older than {days} days).")
 
 def get_training_data():
     """
-    Возвращает данные для обучения ML модели.
-    Извлекает вакансии со статусами 'approved' (класс 1) и 'rejected' (класс 0).
+    Returns data for training the ML model.
+    Extracts vacancies with status 'approved' (class 1) and 'rejected' (class 0).
     """
     conn = get_connection()
     cursor = conn.cursor()

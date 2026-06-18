@@ -2,18 +2,18 @@ import re
 
 def parse_indices(text):
     """
-    Парсит строку с индексами и диапазонами вида "2, 5, 12-15".
-    Возвращает отсортированный список уникальных целых чисел.
+    Parses a string containing indices and ranges like "2, 5, 12-15".
+    Returns a sorted list of unique integers.
     """
     indices = set()
-    # Заменяем запятые на пробелы и разбиваем по пробелам
+    # Replace commas with spaces and split by whitespace
     parts = text.replace(",", " ").split()
     for part in parts:
         part = part.strip()
         if not part:
             continue
         
-        # Проверяем наличие диапазона типа "12-15"
+        # Check for a range format like "12-15"
         range_match = re.match(r"^(\d+)-(\d+)$", part)
         if range_match:
             start = int(range_match.group(1))
