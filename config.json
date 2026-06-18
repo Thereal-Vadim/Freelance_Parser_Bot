@@ -1,0 +1,17 @@
+{
+  "keywords": [
+    "Telegram", "ТГ", "бот", "Mini App", "Web App", "Веб-приложение", "PWA",
+    "Чат-бот", "AI", "ИИ", "Нейросеть", "Промт", "Prompt", "GPT", "ChatGPT", 
+    "LLM", "Midjourney", "Claude", "Вайбкодер", "Vibe coding", 
+    "React", "Node.js", "Next.js", "Python", "JavaScript", "JS", 
+    "HTML", "CSS", "PHP", "Сайт под ключ", "Верстка", "WordPress", 
+    "Tilda", "Figma", "UI/UX", "Веб-дизайнер", "Дизайн сайтов", 
+    "Bubble", "Salebot", "BAS",
+    "Мобильное приложение", "Mobile app", "Android", "Андроид", "iOS", 
+    "React Native", "Flutter", "Swift", "Kotlin"
+  ],
+  "minus_words": [
+    "студенческая", "за отзыв", "курсовая", "дипломная", "реферат", "домашнее задание", "бесплатно"
+  ],
+  "scan_interval_minutes": 5
+}

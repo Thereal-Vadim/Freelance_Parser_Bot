@@ -1,0 +1,31 @@
+# Local configuration & environment variables
+.env
+
+# Google Sheets credentials file
+credentials.json
+
+# Local database
+*.db
+jobs.db
+
+# Python virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
