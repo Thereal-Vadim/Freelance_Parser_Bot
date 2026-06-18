@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), "jobs.db")
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -159,3 +159,16 @@ def update_jobs_status(external_ids, new_status):
     """, params)
     conn.commit()
     conn.close()
+
+def cleanup_old_jobs(days=14):
+    """
+    Удаляет старые вакансии из БД, чтобы она не разрасталась.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM parsed_jobs WHERE created_at < datetime('now', '-{days} days')")
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    if deleted_count > 0:
+        logger.info(f"Удалено {deleted_count} старых вакансий (старше {days} дней).")

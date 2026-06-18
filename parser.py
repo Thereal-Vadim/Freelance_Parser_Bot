@@ -60,10 +60,7 @@ def fetch_kwork_jobs():
                 logger.error(f"Не удалось загрузить Kwork (страница {page}), статус: {res.status_code}")
                 continue
                 
-            match = re.search(r"window\.stateData\s*=\s*(\{.*?\});", res.text)
-            if not match:
-                match = re.search(r"window\.stateData\s*=\s*(\{.*?\}\n)", res.text)
-                
+            match = re.search(r"window\.stateData\s*=\s*(\{.*?\});", res.text, flags=re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
                 wants = data.get("wants", [])
@@ -183,6 +180,7 @@ def apply_filter(title, description, keywords, minus_words):
 def run_cycle(dry_run=False):
     import db
     db.init_db()
+    db.cleanup_old_jobs()
     
     logger.info("Запуск цикла парсинга...")
     config = load_config()

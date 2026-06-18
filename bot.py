@@ -272,6 +272,14 @@ async def cmd_start(message: types.Message):
     db.register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     await message.reply("Привет! Отправь мне сообщение с ссылкой на вакансию и скриншот отклика, и я запишу её в таблицу!")
 
+@dp.message(Command("cancel"))
+async def cmd_cancel(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state is None:
+        return
+    await state.clear()
+    await message.reply("Действие отменено. Бот вернулся в обычный режим.")
+
 @dp.message()
 async def handle_report(message: types.Message):
     # Если список пользователей не пустой и ID отправителя нет в списке, игнорируем
@@ -295,36 +303,8 @@ async def handle_report(message: types.Message):
 
     status_message = await message.reply("Секунду, заношу в таблицу...")
 
-    # Если к сообщению прикреплено фото
-    if message.photo:
-        try:
-            # Берем фото самого высокого качества
-            photo = message.photo[-1]
-            temp_filename = f"temp_{message.message_id}.png"
-            temp_path = os.path.join(os.path.dirname(__file__), temp_filename)
-            
-            # Скачиваем файл во временную папку проекта
-            await bot.download(photo, destination=temp_path)
-            
-            # Загружаем в Google Drive (в фоновом потоке)
-            file_id = await asyncio.to_thread(upload_file_to_drive, temp_path, temp_filename)
-            
-            # Удаляем временный файл
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-                
-            if file_id:
-                # Вставляем формулу для отображения картинки прямо в ячейке
-                screenshot_formula_or_url = f'=IMAGE("https://drive.google.com/uc?export=view&id={file_id}")'
-            else:
-                # Если Google Drive API не включен, бот об этом сообщит в процессе работы
-                await status_message.edit_text("Не удалось загрузить фото на Google Drive (убедитесь, что Drive API включен в консоли). Записываю без фото...")
-        except Exception as e:
-            logger.error(f"Ошибка при обработке и загрузке фото: {e}")
-            await status_message.edit_text(f"Ошибка при обработке фото: {e}. Продолжаю без фото...")
-    else:
-        # Если фото нет, проверяем вторую ссылку в сообщении
-        screenshot_formula_or_url = urls[1] if len(urls) > 1 else ""
+    # Фото больше не обрабатываются ботом
+    screenshot_formula_or_url = urls[1] if len(urls) > 1 else ""
 
     # Выполняем парсинг тайтла в отдельном потоке (CPU/IO blocking)
     title = await asyncio.to_thread(fetch_vacancy_title, vacancy_url)
