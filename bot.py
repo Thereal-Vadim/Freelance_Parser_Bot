@@ -286,51 +286,7 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
     await state.clear()
     await message.reply("Действие отменено. Бот вернулся в обычный режим.")
 
-@dp.message()
-async def handle_report(message: types.Message):
-    # Если список пользователей не пустой и ID отправителя нет в списке, игнорируем
-    if not is_user_allowed(message.from_user):
-        logger.warning(f"Игнорируем сообщение от неразрешенного пользователя ID {message.from_user.id} (@{message.from_user.username})")
-        return
 
-    db.register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
-
-    text = message.text or message.caption or ""
-    text = text.strip()
-    
-    # Ищем ссылки в тексте
-    urls = re.findall(r"https?://[^\s]+", text)
-    if not urls:
-        await message.reply("Не нашел ссылки на вакансию в сообщении.")
-        return
-
-    vacancy_url = urls[0]
-    screenshot_formula_or_url = ""
-
-    status_message = await message.reply("Секунду, заношу в таблицу...")
-
-    # Фото больше не обрабатываются ботом
-    screenshot_formula_or_url = urls[1] if len(urls) > 1 else ""
-
-    # Выполняем парсинг тайтла в отдельном потоке (CPU/IO blocking)
-    title = await asyncio.to_thread(fetch_vacancy_title, vacancy_url)
-    date_str = datetime.now().strftime("%d.%m.%Y")
-
-    try:
-        # Записываем в Google Sheets в отдельном потоке (Network/IO blocking)
-        row_num = await asyncio.to_thread(
-            add_vacancy_to_sheet, 
-            title, 
-            vacancy_url, 
-            date_str, 
-            screenshot_formula_or_url
-        )
-        await status_message.edit_text(f"Готово! Добавлено под №{row_num}:\n«{title}»")
-        logger.info(f"Успешно добавлена строка #{row_num}: '{title}'")
-        
-    except Exception as e:
-        logger.error(f"Ошибка при записи в Google Sheets: {e}")
-        await status_message.edit_text(f"Ошибка при записи в Google Sheets: {e}")
 
 def format_and_split_leads(jobs_list):
     """
@@ -577,6 +533,52 @@ async def process_approve_all(callback_query: CallbackQuery, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка при пакетной записи в Google Таблицу: {e}")
         await callback_query.message.answer(f"Произошла ошибка при записи в таблицу: {e}")
+
+@dp.message()
+async def handle_report(message: types.Message):
+    # Если список пользователей не пустой и ID отправителя нет в списке, игнорируем
+    if not is_user_allowed(message.from_user):
+        logger.warning(f"Игнорируем сообщение от неразрешенного пользователя ID {message.from_user.id} (@{message.from_user.username})")
+        return
+
+    db.register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
+
+    text = message.text or message.caption or ""
+    text = text.strip()
+    
+    # Ищем ссылки в тексте
+    urls = re.findall(r"https?://[^\s]+", text)
+    if not urls:
+        await message.reply("Не нашел ссылки на вакансию в сообщении.")
+        return
+
+    vacancy_url = urls[0]
+    screenshot_formula_or_url = ""
+
+    status_message = await message.reply("Секунду, заношу в таблицу...")
+
+    # Фото больше не обрабатываются ботом
+    screenshot_formula_or_url = urls[1] if len(urls) > 1 else ""
+
+    # Выполняем парсинг тайтла в отдельном потоке (CPU/IO blocking)
+    title = await asyncio.to_thread(fetch_vacancy_title, vacancy_url)
+    date_str = datetime.now().strftime("%d.%m.%Y")
+
+    try:
+        # Записываем в Google Sheets в отдельном потоке (Network/IO blocking)
+        row_num = await asyncio.to_thread(
+            add_vacancy_to_sheet, 
+            title, 
+            vacancy_url, 
+            date_str, 
+            screenshot_formula_or_url
+        )
+        await status_message.edit_text(f"Готово! Добавлено под №{row_num}:\n«{title}»")
+        logger.info(f"Успешно добавлена строка #{row_num}: '{title}'")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при записи в Google Sheets: {e}")
+        await status_message.edit_text(f"Ошибка при записи в Google Sheets: {e}")
 
 async def main():
     db.init_db()
