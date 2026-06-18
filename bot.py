@@ -32,30 +32,20 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "credentials.json")
 ALLOWED_USERS_RAW = os.getenv("ALLOWED_USERS", "")
 
-# Парсинг списка разрешенных пользователей (ID или юзернеймы)
+# Парсинг списка разрешенных пользователей (только цифровые ID)
 ALLOWED_IDS = set()
-ALLOWED_USERNAMES = set()
 for item in ALLOWED_USERS_RAW.split(","):
     item = item.strip()
-    if not item:
-        continue
     if item.isdigit():
         ALLOWED_IDS.add(int(item))
-    else:
-        # Убираем символ @, если он указан
-        username = item.lstrip("@").lower()
-        if username:
-            ALLOWED_USERNAMES.add(username)
+    elif item:
+        logger.warning(f"Игнорируем нечисловой ID в ALLOWED_USERS: {item}. Юзернеймы не поддерживаются в целях безопасности.")
 
 def is_user_allowed(user: types.User) -> bool:
-    # Если списки разрешенных пользователей пусты, доступ открыт для всех
-    if not ALLOWED_IDS and not ALLOWED_USERNAMES:
+    # Если список разрешенных пользователей пуст, доступ открыт для всех
+    if not ALLOWED_IDS:
         return True
-    if user.id in ALLOWED_IDS:
-        return True
-    if user.username and user.username.lower() in ALLOWED_USERNAMES:
-        return True
-    return False
+    return user.id in ALLOWED_IDS
 
 if not TG_TOKEN:
     logger.error("КРИТИЧЕСКАЯ ОШИБКА: Переменная окружения TG_TOKEN не задана!")
