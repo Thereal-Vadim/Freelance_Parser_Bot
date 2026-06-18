@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+import ml
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -206,6 +208,15 @@ def run_cycle(dry_run=False):
     
     for job in all_jobs:
         matched = apply_filter(job["title"], job["description"], keywords, minus_words)
+        status = "new"
+        
+        if matched:
+            # Пытаемся предсказать ML моделью
+            prob = ml.predict_job(job["title"], job["description"])
+            ml_threshold = config.get("ml_rejection_threshold", 0.35)
+            if prob is not None and prob < ml_threshold:
+                status = "ml_rejected"
+                
         job_data = {
             "source": job["source"],
             "external_id": job["external_id"],
@@ -214,7 +225,7 @@ def run_cycle(dry_run=False):
             "description": job["description"],
             "price": job["price"],
             "matched": 1 if matched else 0,
-            "status": "new"
+            "status": status
         }
         processed_jobs.append(job_data)
         if matched:
@@ -248,9 +259,15 @@ def main():
     interval = config.get("scan_interval_minutes", 5)
     
     logger.info(f"Запуск демона парсера. Интервал опроса: {interval} мин.")
+    cycle_count = 0
     while True:
         try:
             run_cycle()
+            cycle_count += 1
+            # Периодическое переобучение ML модели каждые 5 циклов
+            if cycle_count % 5 == 0:
+                logger.info("Запуск фонового переобучения ML-модели...")
+                ml.train_model()
         except Exception as e:
             logger.error(f"Непредвиденная ошибка в цикле парсинга: {e}")
         

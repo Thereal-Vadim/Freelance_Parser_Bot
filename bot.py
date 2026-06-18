@@ -18,6 +18,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request
 import db
+import ml
 from utils import parse_indices
 
 # Настройка логирования
@@ -277,6 +278,19 @@ async def cmd_start(message: types.Message):
         return
     db.register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     await message.reply("Привет! Отправь мне сообщение с ссылкой на вакансию и скриншот отклика, и я запишу её в таблицу!")
+
+@dp.message(Command("train"))
+async def cmd_train(message: types.Message):
+    if not is_user_allowed(message.from_user):
+        return
+    status_msg = await message.reply("Обучаю ML-модель...")
+    try:
+        # Тренируем в отдельном потоке, так как scikit-learn может занять CPU
+        result_msg = await asyncio.to_thread(ml.train_model)
+        await status_msg.edit_text(result_msg)
+    except Exception as e:
+        logger.error(f"Ошибка при обучении модели: {e}")
+        await status_msg.edit_text(f"Произошла ошибка: {e}")
 
 @dp.message(Command("cancel"))
 async def cmd_cancel(message: types.Message, state: FSMContext):

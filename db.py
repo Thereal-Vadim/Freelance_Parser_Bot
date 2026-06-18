@@ -172,3 +172,30 @@ def cleanup_old_jobs(days=14):
     conn.close()
     if deleted_count > 0:
         logger.info(f"Удалено {deleted_count} старых вакансий (старше {days} дней).")
+
+def get_training_data():
+    """
+    Возвращает данные для обучения ML модели.
+    Извлекает вакансии со статусами 'approved' (класс 1) и 'rejected' (класс 0).
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT title, description, status
+        FROM parsed_jobs
+        WHERE status IN ('approved', 'rejected')
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    X = []
+    y = []
+    for row in rows:
+        title = row["title"] or ""
+        desc = row["description"] or ""
+        text = f"{title} {desc}".strip()
+        label = 1 if row["status"] == "approved" else 0
+        X.append(text)
+        y.append(label)
+        
+    return X, y
