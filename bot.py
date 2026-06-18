@@ -60,19 +60,24 @@ class LeadStates(StatesGroup):
     waiting_for_replace = State()
 
 # Подключение к Google Таблицам (синхронная вспомогательная функция)
+_google_sheet_cache = None
+
 def get_google_sheet():
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    if not os.path.exists(CREDENTIALS_FILE):
-        raise FileNotFoundError(f"Файл учетных данных '{CREDENTIALS_FILE}' не найден. Пожалуйста, следуйте инструкциям в README.md.")
-    
-    creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
-    client = gspread.authorize(creds)
-    workbook = client.open_by_key(SPREADSHEET_ID)
-    # Берем самый последний лист (актуальный отчет)
-    return workbook.worksheets()[-1]
+    global _google_sheet_cache
+    if _google_sheet_cache is None:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        if not os.path.exists(CREDENTIALS_FILE):
+            raise FileNotFoundError(f"Файл учетных данных '{CREDENTIALS_FILE}' не найден. Пожалуйста, следуйте инструкциям в README.md.")
+        
+        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
+        client = gspread.authorize(creds)
+        workbook = client.open_by_key(SPREADSHEET_ID)
+        # Берем самый последний лист (актуальный отчет)
+        _google_sheet_cache = workbook.worksheets()[-1]
+    return _google_sheet_cache
 
 # Получение OAuth2 токена доступа к Google API (для загрузки файлов)
 def get_drive_access_token():
