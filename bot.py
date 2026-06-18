@@ -1,5 +1,6 @@
 import os
 import re
+import html
 import logging
 import asyncio
 import json
@@ -336,9 +337,15 @@ def format_and_split_leads(jobs_list):
     for idx, job in enumerate(jobs_list):
         source_name = "Kwork" if job["source"] == "kwork" else "FL.ru"
         price_str = f" [{job['price']}]" if job.get("price") else ""
+        
+        # Экранируем опасные символы для Telegram HTML
+        safe_title = html.escape(job['title'])
+        safe_url = html.escape(job['url'])
+        safe_price = html.escape(price_str)
+        
         item_text = (
-            f"<b>{idx + 1}. {job['title']} / {source_name} /{price_str}</b>\n"
-            f"- {job['url']}\n\n"
+            f"<b>{idx + 1}. {safe_title} / {source_name} /{safe_price}</b>\n"
+            f"- {safe_url}\n\n"
         )
         if len(current_chunk) + len(item_text) > 4000:
             chunks.append(current_chunk)
