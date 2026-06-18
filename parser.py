@@ -58,6 +58,7 @@ def fetch_kwork_jobs():
             res = requests.get(url, headers=headers, timeout=10)
             if res.status_code != 200:
                 logger.error(f"Не удалось загрузить Kwork (страница {page}), статус: {res.status_code}")
+                time.sleep(2)
                 continue
                 
             match = re.search(r"window\.stateData\s*=\s*(\{.*?\});", res.text, flags=re.DOTALL)
@@ -103,6 +104,9 @@ def fetch_kwork_jobs():
                 logger.error(f"Не удалось найти window.stateData на странице Kwork {page}")
         except Exception as e:
             logger.error(f"Ошибка при парсинге Kwork (страница {page}): {e}")
+            
+        # Задержка между страницами, чтобы не словить бан по IP от Cloudflare
+        time.sleep(2)
             
     return jobs
 
