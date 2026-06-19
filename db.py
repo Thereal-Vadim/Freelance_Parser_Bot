@@ -232,6 +232,8 @@ def save_current_leads(chat_id, jobs):
 def get_current_leads(chat_id):
     """
     Retrieves the current leads for a user from the database.
+    If no current leads are found in the persistent FSM table,
+    falls back to the last 25 jobs marked as 'shown'.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -246,6 +248,28 @@ def get_current_leads(chat_id):
         """, (chat_id,))
         rows = cursor.fetchall()
         jobs = [dict(row) for row in rows]
+        
+        # Fallback if no entries are found in user_current_leads (e.g. leads shown before the update)
+        if not jobs:
+            cursor.execute("""
+                SELECT id, source, external_id, title, url, description, price, created_at, matched, status
+                FROM parsed_jobs
+                WHERE status = 'shown'
+                ORDER BY id DESC
+                LIMIT 25
+            """)
+            rows = cursor.fetchall()
+            jobs = [dict(row) for row in rows]
+            
+            # Save the retrieved leads to user_current_leads to register their indices
+            if jobs:
+                cursor.execute("DELETE FROM user_current_leads WHERE chat_id = ?", (chat_id,))
+                for idx, job in enumerate(jobs):
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO user_current_leads (chat_id, job_index, external_id)
+                        VALUES (?, ?, ?)
+                    """, (chat_id, idx, job["external_id"]))
+                conn.commit()
     except Exception as e:
         logger.error(f"Error getting current leads for {chat_id}: {e}")
     finally:
