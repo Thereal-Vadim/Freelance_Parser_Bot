@@ -74,7 +74,10 @@ def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="⚡ Get Leads (Force)")
             ],
             [
-                KeyboardButton(text="🧠 Train ML Model"),
+                KeyboardButton(text="🧠 Train ML"),
+                KeyboardButton(text="📊 ML Insights")
+            ],
+            [
                 KeyboardButton(text="❌ Cancel")
             ]
         ],
@@ -299,6 +302,7 @@ async def cmd_start(message: types.Message):
     )
 
 @dp.message(Command("train"))
+@dp.message(F.text == "🧠 Train ML")
 @dp.message(F.text == "🧠 Train ML Model")
 async def cmd_train(message: types.Message):
     if not is_user_allowed(message.from_user):
@@ -321,6 +325,49 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         return
     await state.clear()
     await message.reply("Action cancelled. The bot has returned to normal mode.", reply_markup=get_main_menu_keyboard())
+
+
+@dp.message(Command("insights"))
+@dp.message(F.text == "📊 ML Insights")
+async def cmd_insights(message: types.Message):
+    if not is_user_allowed(message.from_user):
+        return
+        
+    db.register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
+    status_msg = await message.reply("Analyzing ML model insights...")
+    
+    try:
+        insights = await asyncio.to_thread(ml.get_model_insights)
+        
+        if not insights.get("trained", False):
+            reply_text = (
+                "🧠 <b>Аналитика моего обучения:</b>\n\n"
+                "⚠️ Модель еще не обучена.\n\n"
+                f"📊 Всего в базе: {insights['total_count']} вакансий "
+                f"(Одобрено: {insights['approved_count']}, Отклонено: {insights['rejected_count']})"
+            )
+        else:
+            app_words = [html.escape(w) for w in insights.get("approved_words", [])]
+            rej_words = [html.escape(w) for w in insights.get("rejected_words", [])]
+            
+            app_words_str = ", ".join(app_words) if app_words else "нет слов"
+            rej_words_str = ", ".join(rej_words) if rej_words else "нет слов"
+            
+            reply_text = (
+                "🧠 <b>Аналитика моего обучения:</b>\n\n"
+                "✅ <b>Что я люблю (повышает шанс одобрения):</b>\n"
+                f"- {app_words_str}\n\n"
+                "❌ <b>Что я не люблю (повышает шанс отказа):</b>\n"
+                f"- {rej_words_str}\n\n"
+                f"📊 Всего в базе: {insights['total_count']} вакансий "
+                f"(Одобрено: {insights['approved_count']}, Отклонено: {insights['rejected_count']})"
+            )
+            
+        await status_msg.edit_text(reply_text, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error handling insights command: {e}")
+        await status_msg.edit_text(f"An error occurred: {e}")
+
 
 
 

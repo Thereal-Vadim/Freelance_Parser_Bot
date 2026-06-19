@@ -325,3 +325,26 @@ def clear_current_leads(chat_id):
         logger.error(f"Error clearing current leads for {chat_id}: {e}")
     finally:
         conn.close()
+
+def get_labeled_jobs_count():
+    """
+    Returns the count of approved, rejected, and total jobs in the database.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    approved = 0
+    rejected = 0
+    total = 0
+    try:
+        cursor.execute("SELECT COUNT(1) FROM parsed_jobs WHERE status = 'approved'")
+        approved = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(1) FROM parsed_jobs WHERE status = 'rejected'")
+        rejected = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(1) FROM parsed_jobs")
+        total = cursor.fetchone()[0]
+    except Exception as e:
+        logger.error(f"Error counting labeled jobs: {e}")
+    finally:
+        conn.close()
+    return approved, rejected, total
+

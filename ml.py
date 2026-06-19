@@ -74,3 +74,70 @@ def predict_job(title, description):
     
     # probabilities[1] is the probability of class 1 (Approved)
     return float(probabilities[1])
+
+def get_model_insights():
+    """
+    Extracts insights about the trained ML model.
+    Returns a dict with training stats and top features.
+    """
+    approved_count, rejected_count, total_count = db.get_labeled_jobs_count()
+    
+    if not os.path.exists(MODEL_PATH):
+        return {
+            "trained": False,
+            "approved_words": [],
+            "rejected_words": [],
+            "approved_count": approved_count,
+            "rejected_count": rejected_count,
+            "total_count": total_count
+        }
+        
+    try:
+        pipeline = joblib.load(MODEL_PATH)
+        vectorizer = pipeline.named_steps['tfidf']
+        classifier = pipeline.named_steps['clf']
+        feature_names = vectorizer.get_feature_names_out()
+        
+        classes = list(classifier.classes_)
+        approved_words = []
+        rejected_words = []
+        
+        if len(classes) == 2 and 0 in classes and 1 in classes:
+            idx_rejected = classes.index(0)
+            idx_approved = classes.index(1)
+            
+            log_prob_rejected = classifier.feature_log_prob_[idx_rejected]
+            log_prob_approved = classifier.feature_log_prob_[idx_approved]
+            
+            # log ratio = log P(w|Approved) - log P(w|Rejected)
+            ratios = log_prob_approved - log_prob_rejected
+            
+            feature_ratios = list(zip(feature_names, ratios))
+            # Sort by ratio ascending
+            feature_ratios.sort(key=lambda x: x[1])
+            
+            # Top rejected (lowest ratios - class 0/rejected has higher relative weight)
+            rejected_words = [word for word, ratio in feature_ratios[:10]]
+            # Top approved (highest ratios - class 1/approved has higher relative weight)
+            approved_words = [word for word, ratio in feature_ratios[-10:][::-1]]
+            
+        return {
+            "trained": True,
+            "approved_words": approved_words,
+            "rejected_words": rejected_words,
+            "approved_count": approved_count,
+            "rejected_count": rejected_count,
+            "total_count": total_count
+        }
+    except Exception as e:
+        logger.error(f"Error generating model insights: {e}")
+        return {
+            "trained": False,
+            "approved_words": [],
+            "rejected_words": [],
+            "approved_count": approved_count,
+            "rejected_count": rejected_count,
+            "total_count": total_count,
+            "error": str(e)
+        }
+
