@@ -12,7 +12,7 @@ from aiogram.filters import Command
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import InlineKeyboardButton, CallbackQuery
+from aiogram.types import InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
@@ -65,6 +65,22 @@ if not SPREADSHEET_ID:
 
 bot = Bot(token=TG_TOKEN) if TG_TOKEN else None
 dp = Dispatcher()
+
+def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="📋 Get Leads"),
+                KeyboardButton(text="⚡ Get Leads (Force)")
+            ],
+            [
+                KeyboardButton(text="🧠 Train ML Model"),
+                KeyboardButton(text="❌ Cancel")
+            ]
+        ],
+        resize_keyboard=True
+    )
+    return keyboard
 
 class LeadStates(StatesGroup):
     reviewing = State()
@@ -277,9 +293,13 @@ async def cmd_start(message: types.Message):
         logger.warning(f"Unauthorized access attempt from ID {message.from_user.id} (@{message.from_user.username})")
         return
     db.register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
-    await message.reply("Hello! Send me a message containing a job link and a screenshot of the application, and I'll record it in the table!")
+    await message.reply(
+        "Hello! Send me a message containing a job link and a screenshot of the application, and I'll record it in the table!",
+        reply_markup=get_main_menu_keyboard()
+    )
 
 @dp.message(Command("train"))
+@dp.message(F.text == "🧠 Train ML Model")
 async def cmd_train(message: types.Message):
     if not is_user_allowed(message.from_user):
         return
@@ -293,12 +313,14 @@ async def cmd_train(message: types.Message):
         await status_msg.edit_text(f"An error occurred: {e}")
 
 @dp.message(Command("cancel"))
+@dp.message(F.text == "❌ Cancel")
 async def cmd_cancel(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
     if current_state is None:
+        await message.reply("No active action to cancel.", reply_markup=get_main_menu_keyboard())
         return
     await state.clear()
-    await message.reply("Action cancelled. The bot has returned to normal mode.")
+    await message.reply("Action cancelled. The bot has returned to normal mode.", reply_markup=get_main_menu_keyboard())
 
 
 
@@ -368,6 +390,8 @@ async def send_leads_to_user(event, state: FSMContext, jobs_list):
             await event.message.answer(chunk, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
 
 @dp.message(Command("get_leads"))
+@dp.message(F.text == "📋 Get Leads")
+@dp.message(F.text == "⚡ Get Leads (Force)")
 async def cmd_get_leads(message: types.Message, state: FSMContext):
     if not is_user_allowed(message.from_user):
         logger.warning(f"Unauthorized access attempt from ID {message.from_user.id} (@{message.from_user.username})")
@@ -377,7 +401,7 @@ async def cmd_get_leads(message: types.Message, state: FSMContext):
     
     # Check command arguments (force)
     args = message.text.split()
-    force_mode = len(args) > 1 and args[1].lower() == "force"
+    force_mode = (len(args) > 1 and args[1].lower() == "force") or message.text == "⚡ Get Leads (Force)"
     
     # Check how many new vacancies are available
     conn = db.get_connection()
@@ -429,6 +453,11 @@ async def handle_leads_replace(message: types.Message, state: FSMContext):
         return
         
     text = message.text.strip()
+    if text == "❌ Cancel" or text.lower() == "/cancel":
+        await state.clear()
+        await message.reply("Action cancelled. The bot has returned to normal mode.", reply_markup=get_main_menu_keyboard())
+        return
+
     indices = parse_indices(text)
     if not indices:
         await message.reply(
@@ -563,7 +592,7 @@ async def handle_report(message: types.Message):
     # Search for URLs in the text
     urls = re.findall(r"https?://[^\s]+", text)
     if not urls:
-        await message.reply("Could not find a job link in the message.")
+        await message.reply("Could not find a job link in the message.", reply_markup=get_main_menu_keyboard())
         return
 
     vacancy_url = urls[0]
