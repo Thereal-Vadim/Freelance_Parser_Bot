@@ -437,10 +437,17 @@ async def cmd_get_leads(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "replace_part")
 async def process_replace_part(callback_query: CallbackQuery, state: FSMContext):
     if not is_user_allowed(callback_query.from_user):
-        await callback_query.answer("Access denied", show_alert=True)
+        try:
+            await callback_query.answer("Access denied", show_alert=True)
+        except Exception as e:
+            logger.warning(f"Failed to answer callback query: {e}")
         return
         
-    await callback_query.answer()
+    try:
+        await callback_query.answer()
+    except Exception as e:
+        logger.warning(f"Failed to answer callback query: {e}")
+        
     await state.set_state(LeadStates.waiting_for_replace)
     await callback_query.message.answer(
         "Send the numbers of vacancies to replace (e.g. <code>2, 5, 12-15</code>):",
@@ -545,7 +552,10 @@ async def handle_leads_replace(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "approve_all")
 async def process_approve_all(callback_query: CallbackQuery, state: FSMContext):
     if not is_user_allowed(callback_query.from_user):
-        await callback_query.answer("Access denied", show_alert=True)
+        try:
+            await callback_query.answer("Access denied", show_alert=True)
+        except Exception as e:
+            logger.warning(f"Failed to answer callback query: {e}")
         return
         
     # Get vacancies from state
@@ -553,10 +563,16 @@ async def process_approve_all(callback_query: CallbackQuery, state: FSMContext):
     current_leads = data.get("current_leads", [])
     
     if not current_leads:
-        await callback_query.answer("List is empty or expired.", show_alert=True)
+        try:
+            await callback_query.answer("List is empty or expired.", show_alert=True)
+        except Exception as e:
+            logger.warning(f"Failed to answer callback query: {e}")
         return
         
-    await callback_query.answer("Adding vacancies to Google Sheet...")
+    try:
+        await callback_query.answer("Adding vacancies to Google Sheet...")
+    except Exception as e:
+        logger.warning(f"Failed to answer callback query: {e}")
     
     # Mark vacancies as 'approved' in DB
     ext_ids = [j["external_id"] for j in current_leads]
