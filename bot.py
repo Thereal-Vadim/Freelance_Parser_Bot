@@ -311,10 +311,18 @@ async def cmd_train(message: types.Message):
     try:
         # Train in a separate thread since scikit-learn training blocks the event loop
         result_msg = await asyncio.to_thread(ml.train_model)
-        await status_msg.edit_text(result_msg)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await message.reply(result_msg, reply_markup=get_main_menu_keyboard())
     except Exception as e:
         logger.error(f"Error during model training: {e}")
-        await status_msg.edit_text(f"An error occurred: {e}")
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await message.reply(f"An error occurred: {e}", reply_markup=get_main_menu_keyboard())
 
 @dp.message(Command("cancel"))
 @dp.message(F.text == "❌ Cancel")
@@ -669,7 +677,8 @@ async def process_approve_all(callback_query: CallbackQuery, state: FSMContext):
             f"Successfully added {len(current_leads)} vacancies to Google Sheet!\n"
             f"Row range: {row_numbers[0]} - {row_numbers[-1]}.\n"
             f"Vacancy status is set to <b>\"Pending\"</b>.",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=get_main_menu_keyboard()
         )
         db.clear_current_leads(callback_query.message.chat.id)
         await state.clear()
