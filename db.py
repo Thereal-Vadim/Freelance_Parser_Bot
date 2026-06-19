@@ -137,20 +137,56 @@ def insert_jobs(jobs):
 
 def get_new_matched_jobs(limit=25):
     """
-    Returns a list of new vacancies matching the filter.
+    Returns a list of new vacancies matching the filter, balanced between sources (Kwork and FL.ru).
+    If one source does not have enough jobs, the other source fills the remaining spots.
     """
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # Target count per source (try to split 50/50)
+    target_half = (limit + 1) // 2
+    
+    # 1. Fetch new matched jobs from Kwork
     cursor.execute("""
         SELECT id, source, external_id, title, url, description, price, created_at, matched, status
         FROM parsed_jobs
-        WHERE matched = 1 AND status = "new"
+        WHERE matched = 1 AND status = 'new' AND source = 'kwork'
         ORDER BY id DESC
         LIMIT ?
     """, (limit,))
-    rows = cursor.fetchall()
+    kwork_jobs = [dict(row) for row in cursor.fetchall()]
+    
+    # 2. Fetch new matched jobs from FL.ru
+    cursor.execute("""
+        SELECT id, source, external_id, title, url, description, price, created_at, matched, status
+        FROM parsed_jobs
+        WHERE matched = 1 AND status = 'new' AND source = 'fl'
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,))
+    fl_jobs = [dict(row) for row in cursor.fetchall()]
+    
     conn.close()
-    return [dict(row) for row in rows]
+    
+    kwork_len = len(kwork_jobs)
+    fl_len = len(fl_jobs)
+    
+    # Greedy balancing logic
+    if kwork_len >= target_half and fl_len >= target_half:
+        selected_kwork = kwork_jobs[:target_half]
+        selected_fl = fl_jobs[:limit - target_half]
+    elif kwork_len < target_half:
+        selected_kwork = kwork_jobs
+        selected_fl = fl_jobs[:limit - kwork_len]
+    else:
+        selected_fl = fl_jobs
+        selected_kwork = kwork_jobs[:limit - fl_len]
+        
+    combined = selected_kwork + selected_fl
+    # Sort the combined list by job ID in descending order so that the newest vacancies are first
+    combined.sort(key=lambda x: x["id"], reverse=True)
+    
+    return combined[:limit]
 
 def update_jobs_status(external_ids, new_status):
     """
