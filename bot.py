@@ -406,6 +406,13 @@ async def cmd_get_leads(message: types.Message, state: FSMContext):
     args = message.text.split()
     force_mode = (len(args) > 1 and args[1].lower() == "force") or message.text == "⚡ Get Leads (Force)"
     
+    status_msg = await message.reply("Parsing active freelance boards for new leads...")
+    try:
+        import parser as job_parser
+        await asyncio.to_thread(job_parser.run_cycle)
+    except Exception as e:
+        logger.error(f"Error running parser cycle: {e}")
+        
     # Check how many new vacancies are available
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -414,14 +421,13 @@ async def cmd_get_leads(message: types.Message, state: FSMContext):
     conn.close()
     
     if available_count == 0:
-        await message.reply("There are no new matched vacancies in the database yet. Please wait for the parser to collect them.")
+        await status_msg.edit_text("There are no new matched vacancies in the database yet. Please try again in a few moments.")
         return
         
     if available_count < 25 and not force_mode:
-        await message.reply(
+        await status_msg.edit_text(
             f"There are not 25 new vacancies in the database yet (currently available: {available_count}).\n"
-            f"Please wait for the parser to collect enough, or run "
-            f"<code>/get_leads force</code> to fetch all available vacancies right now.",
+            f"Please run <code>/get_leads force</code> (or tap ⚡ Get Leads (Force)) to fetch all available vacancies right now.",
             parse_mode="HTML"
         )
         return
@@ -434,6 +440,11 @@ async def cmd_get_leads(message: types.Message, state: FSMContext):
     ext_ids = [j["external_id"] for j in jobs]
     db.update_jobs_status(ext_ids, "shown")
     
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+        
     # Send to user
     await send_leads_to_user(message, state, jobs)
 
@@ -502,6 +513,13 @@ async def handle_leads_replace(message: types.Message, state: FSMContext):
     # We need to replace K vacancies
     k = len(indices)
     
+    status_msg = await message.reply("Parsing freelance boards to find replacement leads...")
+    try:
+        import parser as job_parser
+        await asyncio.to_thread(job_parser.run_cycle)
+    except Exception as e:
+        logger.error(f"Error running parser cycle during replacement: {e}")
+        
     # Check if there are new vacancies in DB for replacement
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -551,6 +569,11 @@ async def handle_leads_replace(message: types.Message, state: FSMContext):
         msg_parts.append(f"Replaced vacancies: {replaced_count}")
     if removed_count > 0:
         msg_parts.append(f"Removed without replacement (DB empty): {removed_count}")
+        
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
         
     await message.reply(f"Updating the list. {', '.join(msg_parts)}")
     
