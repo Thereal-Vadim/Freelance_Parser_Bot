@@ -41,6 +41,16 @@ def init_db():
         )
     """)
     
+    # User current leads table (for persisting FSM state of shown leads)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_current_leads (
+            chat_id INTEGER,
+            job_index INTEGER,
+            external_id TEXT,
+            PRIMARY KEY (chat_id, job_index)
+        )
+    """)
+    
     conn.commit()
     conn.close()
     logger.info("SQLite database successfully initialized.")
@@ -199,3 +209,59 @@ def get_training_data():
         y.append(label)
         
     return X, y
+
+def save_current_leads(chat_id, jobs):
+    """
+    Saves the list of current leads shown to a user, replacing any existing ones.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM user_current_leads WHERE chat_id = ?", (chat_id,))
+        for idx, job in enumerate(jobs):
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_current_leads (chat_id, job_index, external_id)
+                VALUES (?, ?, ?)
+            """, (chat_id, idx, job["external_id"]))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error saving current leads for {chat_id}: {e}")
+    finally:
+        conn.close()
+
+def get_current_leads(chat_id):
+    """
+    Retrieves the current leads for a user from the database.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    jobs = []
+    try:
+        cursor.execute("""
+            SELECT p.id, p.source, p.external_id, p.title, p.url, p.description, p.price, p.created_at, p.matched, p.status
+            FROM parsed_jobs p
+            JOIN user_current_leads u ON p.external_id = u.external_id
+            WHERE u.chat_id = ?
+            ORDER BY u.job_index ASC
+        """, (chat_id,))
+        rows = cursor.fetchall()
+        jobs = [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error getting current leads for {chat_id}: {e}")
+    finally:
+        conn.close()
+    return jobs
+
+def clear_current_leads(chat_id):
+    """
+    Clears the current leads for a user.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM user_current_leads WHERE chat_id = ?", (chat_id,))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error clearing current leads for {chat_id}: {e}")
+    finally:
+        conn.close()

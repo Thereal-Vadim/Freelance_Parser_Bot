@@ -376,7 +376,10 @@ async def send_leads_to_user(event, state: FSMContext, jobs_list):
     builder.adjust(2)
     markup = builder.as_markup()
     
-    # Save vacancies to FSM state
+    # Save vacancies to FSM state and SQLite DB
+    chat_id = event.chat.id if isinstance(event, types.Message) else event.message.chat.id
+    db.save_current_leads(chat_id, jobs_list)
+    
     await state.update_data(current_leads=jobs_list)
     await state.set_state(LeadStates.reviewing)
     
@@ -473,10 +476,15 @@ async def handle_leads_replace(message: types.Message, state: FSMContext):
         )
         return
         
-    # Retrieve current vacancies from state
+    # Retrieve current vacancies from state or database
     data = await state.get_data()
     current_leads = data.get("current_leads", [])
     
+    if not current_leads:
+        current_leads = db.get_current_leads(message.chat.id)
+        if current_leads:
+            await state.update_data(current_leads=current_leads)
+            
     if not current_leads:
         await message.reply("The vacancy list in memory is empty. Please request new ones using /get_leads.")
         await state.clear()
@@ -558,10 +566,15 @@ async def process_approve_all(callback_query: CallbackQuery, state: FSMContext):
             logger.warning(f"Failed to answer callback query: {e}")
         return
         
-    # Get vacancies from state
+    # Get vacancies from state or database
     data = await state.get_data()
     current_leads = data.get("current_leads", [])
     
+    if not current_leads:
+        current_leads = db.get_current_leads(callback_query.message.chat.id)
+        if current_leads:
+            await state.update_data(current_leads=current_leads)
+            
     if not current_leads:
         try:
             await callback_query.answer("List is empty or expired.", show_alert=True)
@@ -588,6 +601,7 @@ async def process_approve_all(callback_query: CallbackQuery, state: FSMContext):
             f"Vacancy status is set to <b>\"Pending\"</b>.",
             parse_mode="HTML"
         )
+        db.clear_current_leads(callback_query.message.chat.id)
         await state.clear()
     except Exception as e:
         logger.error(f"Error during batch write to Google Sheet: {e}")
